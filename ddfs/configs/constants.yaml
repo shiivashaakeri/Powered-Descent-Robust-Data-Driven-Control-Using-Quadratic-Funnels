@@ -1,0 +1,14 @@
+rocket2d:
+  model: rocket2d
+  gamma: 0.015531746644800594
+  gamma_norm: l2
+  K: 101
+  dt: 0.1
+  nominal_dir: /Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket2d
+rocket6dof:
+  model: rocket6dof
+  gamma: 0.0359230597600545
+  gamma_norm: l2
+  K: 181
+  dt: 0.1000334396044351
+  nominal_dir: /Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket6dof

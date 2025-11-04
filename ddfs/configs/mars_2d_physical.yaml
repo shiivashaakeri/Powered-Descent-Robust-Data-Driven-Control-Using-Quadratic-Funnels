@@ -3,11 +3,10 @@ meta:
   inherits_nominal: "nominal/configs/mars_2d_fixed.yaml"   # reuse dt, K, scaling, etc.
   description: "Plant with mild mass/CoM/thrust/limits mismatch + perturbed x0"
 
+
 execution:
-  # Guidance cycle & horizon are inferred from nominal metadata (Δt = t_f/(K-1)).
   use_nominal_timing: true
-  # Optional: override if desired
-  # dt: 0.34
+  dt: 0.1
 
 model:
   name: rocket2d

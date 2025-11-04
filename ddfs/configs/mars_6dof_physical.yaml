@@ -5,7 +5,7 @@ meta:
 
 execution:
   use_nominal_timing: true
-  # dt: 0.52   # optional manual override
+  dt: 0.1
 
 model:
   name: rocket6dof
@@ -54,7 +54,7 @@ assumptions:
       dr_max_m:        [20.0, 20.0, 25.0]
       dv_max_mps:      [15.0, 15.0, 15.0]
       deuler_max_deg:  [8.0, 8.0, 8.0]
-      domega_max_degps:[20.0, 20.0, 20.0]
+      domega_max_degps: [20.0, 20.0, 20.0]
     input:
       dT_max_N:        0.10 * 7.8e5
       dgimbal_max_deg: 2.0

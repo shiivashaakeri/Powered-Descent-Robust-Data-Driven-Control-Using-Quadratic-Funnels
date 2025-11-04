@@ -1,138 +1,124 @@
-# This file contains the parameters for the system dynamics.
-
+# system_dynamics/params.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 
-Array = np.ndarray
+
+# ---------------------------------------
+# helpers / conventions
+# ---------------------------------------
+def deg2rad(d: float) -> float:
+    return np.pi * d / 180.0
+
+
+# canonical basis in R^3 (I-frame axes)
+e1 = np.array([1.0, 0.0, 0.0], dtype=float)
+e2 = np.array([0.0, 1.0, 0.0], dtype=float)
+e3 = np.array([0.0, 0.0, 1.0], dtype=float)
 
 
 @dataclass(frozen=True)
-class VehicleParams:
-    # Inertia (kg m^2)
-    J: Array  # shape (3, 3)
+class VehicleEnvParams:
+    # --- propulsion / mass flow ---
+    Isp: float  # [UT], specific impulse (non-dimensionalized)
+    g0: float  # [UL/UT^2], standard gravity (set by ND scheme)
+    P_amb: float  # [UM/(UT^2*UL)], ambient pressure
+    A_noz: float  # [UL^2], nozzle exit area
 
-    # Location of engine force application in body frame (m)
-    r_F_B: Array  # shape (3,)  # noqa: N815
+    # --- thrust limits & gimbal ---
+    T_min: float  # [UM*UL/UT^2]
+    T_max: float  # [UM*UL/UT^2]
+    delta_max_rad: float  # [rad], max gimbal angle (relative to body x-axis)
 
-    # Mas flow proportionality (s/m)
-    alpha_mdot: float
+    # --- aero / atmosphere ---
+    rho: float  # [UM/UL^3]
+    S_A: float  # [UL^2], reference area (choose 1.0 if ND)
+    # aerodynamic coefficient matrix C_A = diag(ca_x, ca_yz, ca_yz)
+    ca_x: float
+    ca_yz: float
 
-    # Thrust magnitude bounds (N)
-    F_min: float
-    F_max: float
+    # --- rigid body / geometry ---
+    J_B: np.ndarray  # [UM*UL^2] 3x3 inertia (about CoM, body frame)
+    r_T_B: np.ndarray  # [UL] 3x, engine gimbal pivot (lever arm)  # noqa: N815
+    r_cp_B: np.ndarray  # [UL] 3x, aerodynamic center of pressure  # noqa: N815
 
-    # RCS torque bound (Nm) - infinity norm
-    T_max: float
+    # --- environment constants ---
+    g_I: np.ndarray  # [UL/UT^2] 3x, constant gravity (inertial)  # noqa: N815
 
-    # Max gimbal half angle (rad)
-    delta_max: float
+    # --- state limits ---
+    m_dry: float  # [UM]
+    m_ig: float  # [UM], ignition mass
+    theta_max_rad: float  # [rad], tilt limit
+    omega_max_rad_per_UT: float  # [rad/UT], body-rate limit  # noqa: N815
+    gamma_gs_rad: float  # [rad], glide-slope half-angle
+
+    # --- STC-related knobs (angle-of-attack / speed gate, etc.) ---
+    V_alpha: float  # [UL/UT], speed scale for triggers
+    alpha_max_rad: float  # [rad], max angle (e.g., AoA cap used by cSTC)
+
+    # --- model selector ---
+    aero_model: str = "ellipsoidal"  # "ellipsoidal" | "spherical"
+
+    # -------- derived, convenience --------
+    @property
+    def alpha_mdot(self) -> float:
+        """alpha_{ṁ} = 1 / (Isp * g0)"""
+        return 1.0 / (self.Isp * self.g0)
+
+    @property
+    def beta_mdot(self) -> float:
+        """beta_{ṁ} = alpha_{ṁ} * P_amb * A_noz"""
+        return self.alpha_mdot * self.P_amb * self.A_noz
+
+    @property
+    def C_A(self) -> np.ndarray:
+        """Aerodynamic coefficient SPD matrix in body frame."""
+        return np.diag([self.ca_x, self.ca_yz, self.ca_yz])
 
 
-@dataclass(frozen=True)
-class EnvParams:
-    # Interial gravity vector (m/s^2)
-    g_I: Array  # shape (3,)  # noqa: N815
+def default_params() -> VehicleEnvParams:
+    """
+    Non-dimensional baseline matching the provided spec.
+    Notes:
+      - g0 is set to 1.0 [UL/UT^2] under the ND scheme (adjust if your ND uses a different g0).
+      - S_A and (ca_x, ca_yz) are not specified in the snippet; using benign defaults (1.0).
+        Override as needed when validating aero.
+    """
+    # inertia: 0.168 * diag([2e-2, 1, 1]) UM*UL^2
+    J_B = 0.168 * np.diag([2e-2, 1.0, 1.0])
 
-
-@dataclass(frozen=True)
-class CaseParams:
-    # State hard bounds (absolute box)
-    x_lb: Array  # shape (13,)
-    x_ub: Array  # shape (13,)
-
-    # Deviation  box around nominal
-    dx_lb: Array  # shape (13,)
-    dx_ub: Array  # shape (13,)
-
-    # Input hard bounds (component-wise box)
-    u_lb: Array  # shape (6,)
-    u_ub: Array  # shape (6,)
-
-    # Terminal ellipsoid (Q_f^{1/2}), s.t. (x-x_nom)^T Q_f (x-x_nom) <= 1
-    Qf_max_sqrt: Array  # shape (13, 13)
-
-
-def make_default_params() -> tuple[VehicleParams, EnvParams, CaseParams]:
-    J = np.diag([13600.0, 13600.0, 19150.0])
-    r_F_B = np.array([0.0, 0.0, -0.25])
-    alpha_mdot = 4.5324e-4
-    F_min, F_max = 5400.0, 24750.0
-    T_max = 150.0
-    delta_max = np.deg2rad(25.0)
-
-    g_I = np.array([0.0, 0.0, -1.62])
-
-    x_lb = -np.array([-2100, 150, 150, 0, 40, 40, 30, np.pi, np.pi / 2, np.pi, 0.5, 0.5, 0.5], dtype=float)
-    x_ub = np.array([3737.7, 350, 300, 500, 30, 30, 5, np.pi, np.pi / 2, np.pi, 0.5, 0.5, 0.5], dtype=float)
-
-    dx_angles = (2.0 / 9.0) * np.pi
-    dx_lb = -np.array(
-        [
-            np.inf,
-            100,
-            100,
-            100,
-            np.inf,
-            np.inf,
-            np.inf,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-        ],
-        dtype=float,
+    return VehicleEnvParams(
+        # propulsion / mass flow
+        Isp=30.0,  # UT
+        g0=1.0,  # UL/UT^2 (ND convention)
+        P_amb=0.0,  # UM/(UT^2*UL)
+        A_noz=0.0,  # UL^2
+        # thrust & gimbal
+        T_min=1.5,  # UM*UL/UT^2
+        T_max=6.5,  # UM*UL/UT^2
+        delta_max_rad=deg2rad(20.0),
+        # aero / atmosphere
+        rho=1.0,  # UM/UL^3
+        S_A=1.0,  # UL^2 (choose per ND; 1.0 is a common placeholder)
+        ca_x=1.0,  # set >0; adjust if you want drag-min along body x
+        ca_yz=1.0,  # set >= ca_x; >ca_x enables lift-like component
+        # rigid body / geometry
+        J_B=J_B,
+        r_T_B=(-0.25) * e1,
+        r_cp_B=(+0.05) * e1,
+        # environment
+        g_I=(-1.0) * e1,  # UL/UT^2 along -x_I
+        # state limits
+        m_dry=1.0,  # UM
+        m_ig=2.0,  # UM
+        theta_max_rad=deg2rad(90.0),
+        omega_max_rad_per_UT=deg2rad(28.6),
+        gamma_gs_rad=deg2rad(75.0),
+        # STC knobs
+        V_alpha=2.0,  # UL/UT
+        alpha_max_rad=deg2rad(3.0),
+        # model selector
+        aero_model="ellipsoidal",
     )
-    dx_ub = np.array(
-        [
-            np.inf,
-            100,
-            100,
-            100,
-            np.inf,
-            np.inf,
-            np.inf,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-            dx_angles,
-        ],
-        dtype=float,
-    )
-
-    u_lb = -np.array([7695.5, 7695.5, -5400, 150, 150, 150], dtype=float)
-    u_ub = np.array([7695.5, 7695.5, 24750, 150, 150, 150], dtype=float)
-
-    Qf_vec = np.array(
-        [
-            1673.0,
-            0.5,
-            0.5,
-            0.5,
-            0.25,
-            0.25,
-            0.25,
-            np.pi / 60,
-            np.pi / 60,
-            np.pi / 60,
-            np.pi / 60,
-            np.pi / 60,
-            np.pi / 60,
-        ],
-        dtype=float,
-    )
-    Qf_max_sqrt = np.diag(Qf_vec)  # (13,13)
-
-    veh = VehicleParams(
-        J=J, r_F_B=r_F_B, alpha_mdot=alpha_mdot, F_min=F_min, F_max=F_max, T_max=T_max, delta_max=delta_max
-    )
-    env = EnvParams(g_I=g_I)
-    case = CaseParams(x_lb=x_lb, x_ub=x_ub, dx_lb=dx_lb, dx_ub=dx_ub, u_lb=u_lb, u_ub=u_ub, Qf_max_sqrt=Qf_max_sqrt)
-
-    return veh, env, case

@@ -1,51 +1,60 @@
+# system_dynamics/constraints.py
 from __future__ import annotations
 
 import numpy as np
 
-from .params import CaseParams, VehicleParams
-
-Array = np.ndarray
-
-
-def _thrust_gimbal_ok(F_B: Array, veh: VehicleParams) -> bool:
-    """
-    Gimbal cone: ||F_B|| <= sec(delta_max) * z_B^T F_B
-    where z_B = [0, 0, 1] in body frame.
-    """
-    nF = np.linalg.norm(F_B)
-    rhs = (1.0 / np.cos(veh.delta_max)) * F_B[2]
-    return nF <= rhs + 1e-9
+from .frames import H_gamma, H_theta, e1
+from .params import VehicleEnvParams
+from .typing import ConstraintResult, Control, State
 
 
-def _thrust_mag_ok(F_B: Array, veh: VehicleParams) -> bool:
-    nF = np.linalg.norm(F_B)
-    return (veh.F_min - 1e-9) <= nF <= (veh.F_max + 1e-9)
+def mass_lb(x: State, params: VehicleEnvParams) -> ConstraintResult:
+    residual = x.m - params.m_dry                 # want >= 0
+    return ConstraintResult("mass_lower_bound", residual >= 0.0, residual)
 
+def glide_slope(x: State, params: VehicleEnvParams) -> ConstraintResult:
+    lhs = float(e1 @ x.r_I)
+    rhs = float(np.tan(params.gamma_gs_rad) * np.linalg.norm(H_gamma @ x.r_I))
+    residual = lhs - rhs                           # want >= 0
+    return ConstraintResult("glide_slope", residual >= 0.0, residual, {"lhs": lhs, "rhs": rhs})
 
-def _torque_inf_ok(tau_B: Array, veh: VehicleParams) -> bool:
-    return np.max(np.abs(tau_B)) <= veh.T_max + 1e-9
+def tilt(x: State, params: VehicleEnvParams) -> ConstraintResult:
+    # cos(theta_max) <= 1 - 2||H_theta q||_2   => residual := (1 - 2||Hθ q||) - cos θ_max
+    cos_th_max = float(np.cos(params.theta_max_rad))
+    term = 1.0 - 2.0 * np.linalg.norm(H_theta @ x.q_BI)
+    residual = term - cos_th_max                  # want >= 0
+    return ConstraintResult("tilt", residual >= 0.0, residual, {"term": term, "cos_theta_max": cos_th_max})
 
+def omega_ub(x: State, params: VehicleEnvParams) -> ConstraintResult:
+    normw = float(np.linalg.norm(x.omega_B))
+    residual = float(params.omega_max_rad_per_UT) - normw    # want >= 0 (||ω|| ≤ ω_max)
+    return ConstraintResult("omega_rate_bound", residual >= 0.0, residual, {"||omega||": normw})
 
-def U_constraints_ok(u: Array, veh: VehicleParams) -> bool:
-    F_B = u[:3]
-    tau_B = u[3:]
-    return _thrust_mag_ok(F_B, veh) and _torque_inf_ok(tau_B, veh) and _thrust_gimbal_ok(F_B, veh)
+def thrust_bounds(u: Control, params: VehicleEnvParams) -> tuple[ConstraintResult, ConstraintResult]:
+    Tmag = float(np.linalg.norm(u.T_B))
+    low = Tmag - params.T_min                     # want >= 0
+    high = params.T_max - Tmag                    # want >= 0
+    return (
+        ConstraintResult("thrust_min", low >= 0.0, low, {"||T||": Tmag, "T_min": params.T_min}),
+        ConstraintResult("thrust_max", high >= 0.0, high, {"||T||": Tmag, "T_max": params.T_max}),
+    )
 
+def gimbal(u: Control, params: VehicleEnvParams) -> ConstraintResult:
+    T = u.T_B
+    Tmag = float(np.linalg.norm(T))
+    if Tmag <= 1e-12:
+        # Degenerate: treat as violated relative to min thrust constraint elsewhere
+        return ConstraintResult("gimbal", False, -np.inf, {"||T||": Tmag})
 
-def X_box_ok(x: Array, case: CaseParams) -> bool:
-    return np.all(x >= case.x_lb - 1e-12) and np.all(x <= case.x_ub + 1e-12)
+    cos_delta = float(np.cos(params.delta_max_rad))
+    lhs = float((T @ e1))
+    rhs = cos_delta * Tmag
+    residual = lhs - rhs                           # want >= 0  (e1^T T ≥ cos δ_max ||T||)
+    return ConstraintResult("gimbal", residual >= 0.0, residual, {"lhs": lhs, "rhs": rhs})
 
+def all_state_constraints(x: State, params: VehicleEnvParams) -> list[ConstraintResult]:
+    return [mass_lb(x, params), glide_slope(x, params), tilt(x, params), omega_ub(x, params)]
 
-def delta_X_box_ok(x: Array, x_nom: Array, case: CaseParams) -> bool:
-    dx = x - x_nom
-    return np.all(dx >= case.dx_lb - 1e-12) and np.all(dx <= case.dx_ub + 1e-12)
-
-
-def Xf_ellipsoid_ok(xT: Array, xT_nom: Array, case: CaseParams) -> bool:
-    S = case.Qf_max_sqrt
-    d = S @ (xT - xT_nom)
-    return float(d.T @ d) <= 1.0 + 1e-9
-
-
-def bound_project(v: Array, lb: Array, ub: Array) -> Array:
-    return np.minimum(np.maximum(v, lb), ub)
+def all_control_constraints(u: Control, params: VehicleEnvParams) -> list[ConstraintResult]:
+    lo, hi = thrust_bounds(u, params)
+    return [lo, hi, gimbal(u, params)]

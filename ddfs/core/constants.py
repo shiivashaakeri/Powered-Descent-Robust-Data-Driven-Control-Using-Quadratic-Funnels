@@ -9,9 +9,30 @@ import numpy as np  # pyright: ignore[reportMissingImports]
 import yaml  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
 
 from ddfs.core.mismatch import deltas_and_gamma
+from ddfs.core.nominal_bound import nominal_increment_bounds
 from ddfs.io.load_nominal import load_nominal
 from models.rocket2d import Rocket2D
 from models.rocket6dof import Rocket6DoF
+
+
+def _build_twin_model(model_name: str, r_scale: float, m_scale: float):
+    if model_name == "rocket2d":
+        twin = Rocket2D()
+        twin.r_scale = float(r_scale)
+        twin.m_scale = float(m_scale)
+        twin.nondimensionalize()
+        f_twin, _, _ = twin.get_equations()
+        quat_slice = None
+    elif model_name == "rocket6dof":
+        twin = Rocket6DoF()
+        twin.r_scale = float(r_scale)
+        twin.m_scale = float(m_scale)
+        twin.nondimensionalize()
+        f_twin, _, _ = twin.get_equations()
+        quat_slice = slice(7, 11)
+    else:
+        raise ValueError(f"Unknown model name for twin: {model_name}")
+    return f_twin, quat_slice
 
 
 def _derive_nominal_dir_from_inherits(inherits_nominal: str) -> Path:
@@ -138,18 +159,26 @@ def main():
         q_norms = np.linalg.norm(X_nom[7:11], axis=0)
         print(f"[q] mean|‖q‖-1|={(np.abs(q_norms - 1)).mean():.3g}")
 
-    # Build plant model in the same (non-dimensional) units as nominal
-    _, f_phys, quat_slice, model_name = _build_phys_model(plant_cfg, r_scale, m_scale)
+    # Build plant model for Δ/gamma
+    _, f_phys, quat_slice_phys, model_name = _build_phys_model(plant_cfg, r_scale, m_scale)
 
-    # Compute deltas and gamma at chosen dt
+    # --- Δ and gamma ---
+    _, norms, gamma = deltas_and_gamma(f_phys, X_nom, U_nom, dt_eff, quat_slice_phys)
 
-    _, norms, gamma = deltas_and_gamma(f_phys, X_nom, U_nom, dt_eff, quat_slice)
+    # --- v (nominal increment bound) using the TWIN dynamics ---
+    f_twin, quat_slice_twin = _build_twin_model(model_name, r_scale, m_scale)
+    v_bounds = nominal_increment_bounds(f_twin, X_nom, U_nom, dt_eff, quat_slice_twin)
+    v_disc = float(v_bounds["v_disc"])
+    v_ct = float(v_bounds["v_ct_bound"])
 
     # Merge into constants.yaml under the model key
     out_item = {
         "model": model_name,
         "gamma": float(gamma),
         "gamma_norm": "l2",
+        "v": v_disc,  # stored discrete bound
+        # (optional: keep CT bound as a hint — comment in/out as you prefer)
+        # "v_ct_bound": v_ct,
         "K": int(K_new),
         "dt": float(dt_eff),
         "nominal_dir": str(nom_dir),
@@ -166,6 +195,8 @@ def main():
     print(f"  model: {model_name}")
     print(f"  dt: {dt_eff:.6g}  (K={K_new})")
     print(f"  gamma (max ||Δ||₂): {gamma:.6g}")
+    print(f"  v_disc (max ||[Δx;Δu]||₂): {v_disc:.6g}")
+    print(f"  v_ct_bound (Δt·max ||[ẋ;u̇]||₂): {v_ct:.6g}")
     if norms.size:
         q95 = float(np.percentile(norms, 95))
         med = float(np.median(norms))

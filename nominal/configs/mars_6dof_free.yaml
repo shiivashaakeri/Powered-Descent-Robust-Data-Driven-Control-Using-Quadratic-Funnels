@@ -1,0 +1,78 @@
+# Nominal 6-DoF rocket landing (free final time)
+run:
+  type: free_final_time         # used by runner to pick the pipeline
+  seed: 123
+  output_dir: output/trajectory
+  plot: true
+
+discretization:
+  K: 30                         # trajectory points
+  iterations: 50
+  solver: ECOS                  # ECOS or MOSEK
+  verbose_solver: false
+
+trust_region:
+  w_nu: 1.0e5                   # virtual control weight (||nu||_1)
+  w_sigma: 10.0                 # final-time weight
+  tr_radius_init: 5.0
+  rho_0: 0.0
+  rho_1: 0.25
+  rho_2: 0.9
+  alpha: 2.0
+  beta: 3.2
+
+model:
+  name: rocket6dof
+  nondimensionalize: true
+
+  # Units note:
+  # - Angles are provided in DEGREES; loader should convert to radians.
+  # - Thrust in Newtons; mass in kg; distances in meters before scaling.
+  # - Quaternion will be built from provided Euler angles (XYZ/roll-pitch-yaw).
+
+  mass:
+    m_wet: 30000.0              # kg
+    m_dry: 22000.0              # kg
+
+  inertia:
+    J_B_diag: [4000000.0, 4000000.0, 100000.0]   # kg·m^2
+
+  environment:
+    g_I:   [0.0, 0.0, -9.81]    # m/s^2
+    alpha_m: 0.0003607503608    # 1/(Isp*g0) ≈ 1/(282*9.81) [s/m]
+    r_T_B: [0.0, 0.0, -14.0]    # m (lever arm from CoM to thrust line)
+
+  thrust:
+    T_max: 800000.0             # N
+    T_min: 320000.0             # N (= 0.4 * T_max)
+    max_gimbal_deg: 7.0         # lateral components bounded by tan(delta_max)*Tz
+
+  attitude_limits:
+    max_tilt_deg: 70.0          # body tilt limit
+    max_body_rate_deg: 90.0     # |omega| <= 90 deg/s
+
+  glide_slope:
+    angle_deg: 20.0             # ||r_xy|| <= r_z / tan(gamma_gs)
+
+  boundary:
+    # Initial (position: east, north, up; velocity same frame)
+    r_I_init: [0.0, 200.0, 200.0]          # m
+    v_I_init: [-50.0, -100.0, -50.0]       # m/s
+    euler_init_deg: [0.0, 0.0, 0.0]        # roll, pitch, yaw in deg
+    w_B_init_deg: [0.0, 0.0, 0.0]          # deg/s
+
+    # Final
+    r_I_final: [0.0, 0.0, 0.0]
+    v_I_final: [0.0, 0.0, -5.0]
+    euler_final_deg: [0.0, 0.0, 0.0]
+    w_B_final_deg: [0.0, 0.0, 0.0]
+
+  initialization:
+    t_f_guess: 15.0             # seconds (initial sigma guess for free-final-time)
+    thrust_direction_guess: [0.0, 0.0, 1.0]   # body z-axis thrust
+    thrust_bias: 0.5            # fraction between [T_min, T_max]
+    quaternion_identity_init: true  # use [1,0,0,0] during warm start
+
+io:
+  save_arrays: true
+  save_metadata: true

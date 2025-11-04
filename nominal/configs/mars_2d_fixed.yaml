@@ -1,0 +1,62 @@
+# Nominal 2D rocket landing (fixed final time)
+run:
+  type: fixed_final_time        # used by runner to pick the pipeline
+  seed: 42
+  output_dir: output/trajectory
+  plot: true
+
+discretization:
+  K: 30                         # trajectory points (matches global_parameters.K)
+  iterations: 50                # max SCVX iterations
+  solver: ECOS                  # ECOS or MOSEK
+  verbose_solver: false
+
+trust_region:
+  w_nu: 1.0e5                   # virtual control weight
+  tr_radius_init: 5.0
+  rho_0: 0.0
+  rho_1: 0.25
+  rho_2: 0.9
+  alpha: 2.0                    # shrink factor
+  beta: 3.2                     # grow factor
+
+model:
+  name: rocket2d
+  nondimensionalize: true       # apply length/mass scaling
+
+  # Units note:
+  # - Angles below are specified in DEGREES; loader should convert to radians.
+  # - Thrust is in Newtons BEFORE non-dimensionalization.
+
+  constants:
+    m: 2.0                      # kg
+    I: 1.0e-2                   # kg·m^2
+    g: 1.0                      # m/s^2 (scaled scenario)
+    r_T: 1.0e-2                 # m (lever arm)
+    T_max: 5.0                  # N
+    T_min: 2.0                  # N (= 0.4 * T_max)
+    max_gimbal_deg: 7.0         # |delta| <= 7 deg
+    theta_max_deg: 60.0         # |theta| <= 60 deg
+    w_max_deg: 60.0             # |omega| <= 60 deg
+
+  # Boundary conditions (DEGREES for angles)
+  boundary:
+    x_init:
+      r:  [4.0, 4.0]            # m
+      v:  [-2.0, -1.0]          # m/s
+      theta_deg: 0.0
+      omega_deg: 0.0
+    x_final:
+      r:  [0.0, 0.0]
+      v:  [0.0, 0.0]
+      theta_deg: 0.0
+      omega_deg: 0.0
+
+  initialization:
+    t_f_guess: 10.0             # seconds (fixed final time)
+    thrust_bias: 0.5            # fraction between [T_min, T_max] used for warm start
+    gimbal_guess_deg: 0.0
+
+io:
+  save_arrays: true
+  save_metadata: true

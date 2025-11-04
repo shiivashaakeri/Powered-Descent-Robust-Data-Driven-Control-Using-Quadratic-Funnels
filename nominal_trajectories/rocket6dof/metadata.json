@@ -1,0 +1,151 @@
+{
+  "config": {
+    "discretization": {
+      "K": 30,
+      "iterations": 50,
+      "solver": "ECOS",
+      "verbose_solver": false
+    },
+    "io": {
+      "save_arrays": true,
+      "save_metadata": true
+    },
+    "model": {
+      "attitude_limits": {
+        "max_body_rate_deg": 90.0,
+        "max_tilt_deg": 70.0
+      },
+      "boundary": {
+        "euler_final_deg": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "euler_init_deg": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "r_I_final": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "r_I_init": [
+          0.0,
+          200.0,
+          200.0
+        ],
+        "v_I_final": [
+          0.0,
+          0.0,
+          -5.0
+        ],
+        "v_I_init": [
+          -50.0,
+          -100.0,
+          -50.0
+        ],
+        "w_B_final_deg": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "w_B_init_deg": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "environment": {
+        "alpha_m": 0.0003607503608,
+        "g_I": [
+          0.0,
+          0.0,
+          -9.81
+        ],
+        "r_T_B": [
+          0.0,
+          0.0,
+          -14.0
+        ]
+      },
+      "glide_slope": {
+        "angle_deg": 20.0
+      },
+      "inertia": {
+        "J_B_diag": [
+          4000000.0,
+          4000000.0,
+          100000.0
+        ]
+      },
+      "initialization": {
+        "quaternion_identity_init": true,
+        "t_f_guess": 15.0,
+        "thrust_bias": 0.5,
+        "thrust_direction_guess": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "mass": {
+        "m_dry": 22000.0,
+        "m_wet": 30000.0
+      },
+      "name": "rocket6dof",
+      "nondimensionalize": true,
+      "thrust": {
+        "T_max": 800000.0,
+        "T_min": 320000.0,
+        "max_gimbal_deg": 7.0
+      }
+    },
+    "run": {
+      "output_dir": "output/trajectory",
+      "plot": true,
+      "seed": 123,
+      "type": "free_final_time"
+    },
+    "trust_region": {
+      "alpha": 2.0,
+      "beta": 3.2,
+      "rho_0": 0.0,
+      "rho_1": 0.25,
+      "rho_2": 0.9,
+      "tr_radius_init": 5.0,
+      "w_nu": "1.0e5",
+      "w_sigma": 10.0
+    }
+  },
+  "config_path": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal/configs/mars_6dof_free.yaml",
+  "converged": true,
+  "discretization": {
+    "K": 30,
+    "iterations_done": 12,
+    "iterations_requested": 50
+  },
+  "final_sigma": 18.006019128798318,
+  "model": {
+    "m_scale": 30000.0,
+    "n_u": 3,
+    "n_x": 14,
+    "name": "Rocket6DoF",
+    "r_scale": 282.842712474619
+  },
+  "seed": 123,
+  "solver": {
+    "name": "ECOS",
+    "verbose": false
+  },
+  "trust_region": {
+    "alpha": 2.0,
+    "beta": 3.2,
+    "rho_0": 0.0,
+    "rho_1": 0.25,
+    "rho_2": 0.9,
+    "w_nu": 100000.0,
+    "w_sigma": 10.0
+  }
+}

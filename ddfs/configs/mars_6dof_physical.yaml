@@ -1,0 +1,73 @@
+# Physical (plant) config for 6-DoF rocket — mild parameter and initial-state deviations
+meta:
+  inherits_nominal: "nominal/configs/mars_6dof_free.yaml"
+  description: "Plant with mass/inertia/lever-arm/thrust/glide-slope differences + perturbed x0"
+
+execution:
+  use_nominal_timing: true
+  # dt: 0.52   # optional manual override
+
+model:
+  name: rocket6dof
+  nondimensionalize: same_as_nominal
+
+  mass:
+    m_wet: 30200.0               # kg  (+0.7%)
+    m_dry: 22150.0               # kg  (+0.7%)
+
+  inertia:
+    # Slight asymmetry & drift from CAD/twin
+    J_B_diag: [4.10e6, 3.95e6, 1.05e5]   # kg·m^2
+
+  environment:
+    g_I:   [0.0, 0.0, -9.83]     # m/s^2 (−0.2% stronger)
+    alpha_m: 0.000365            # 1/(Isp*g0) (prop usage bias)
+    r_T_B: [0.2, -0.1, -13.6]    # m (lever arm offset & length change)
+
+  thrust:
+    T_max: 780000.0              # N  (−2.5%)
+    T_min: 330000.0              # N  (slightly higher idle)
+    max_gimbal_deg: 6.5          # deg
+
+  attitude_limits:
+    max_tilt_deg: 68.0
+    max_body_rate_deg: 85.0
+
+  glide_slope:
+    angle_deg: 22.0              # tighter corridor vs twin
+
+  boundary:
+    # ENU convention as in twin; small pose/rate perturbations
+    r_I_init: [5.0, 210.0, 210.0]           # m   (+5 E, +10 N, +10 U)
+    v_I_init: [-48.0, -105.0, -45.0]        # m/s
+    euler_init_deg: [2.0, -1.0, 1.5]        # deg (roll, pitch, yaw)
+    w_B_init_deg: [2.0, 0.0, -1.5]          # deg/s
+
+    r_I_final: [0.0, 0.0, 0.0]
+    v_I_final: [0.0, 0.0, -5.0]
+    euler_final_deg: [0.0, 0.0, 0.0]
+    w_B_final_deg: [0.0, 0.0, 0.0]
+
+assumptions:
+  S_tube:
+    state:
+      dr_max_m:        [20.0, 20.0, 25.0]
+      dv_max_mps:      [15.0, 15.0, 15.0]
+      deuler_max_deg:  [8.0, 8.0, 8.0]
+      domega_max_degps:[20.0, 20.0, 20.0]
+    input:
+      dT_max_N:        0.10 * 7.8e5
+      dgimbal_max_deg: 2.0
+
+  mismatch:
+    gamma_initial: 0.02
+    estimate_from_data: true
+    estimate:
+      method: "percentile_residual"
+      percentile: 0.95
+      min_samples: 300
+
+data_collection:
+  excite: true
+  epsilon_max: 0.015
+  safety_margin: 0.12

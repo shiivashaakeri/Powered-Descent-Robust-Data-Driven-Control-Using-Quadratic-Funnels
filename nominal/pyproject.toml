@@ -1,0 +1,33 @@
+[project]
+name = "nominal"
+version = "0.1.0"
+description = "Nominal powered-descent trajectory optimization via successive convexification (clean refactor)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "sympy>=1.12",
+  "cvxpy>=1.4",
+  "matplotlib>=3.7",
+  "PyYAML>=6.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

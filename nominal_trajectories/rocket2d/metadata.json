@@ -1,0 +1,103 @@
+{
+  "config": {
+    "discretization": {
+      "K": 30,
+      "iterations": 50,
+      "solver": "ECOS",
+      "verbose_solver": false
+    },
+    "io": {
+      "save_arrays": true,
+      "save_metadata": true
+    },
+    "model": {
+      "boundary": {
+        "x_final": {
+          "omega_deg": 0.0,
+          "r": [
+            0.0,
+            0.0
+          ],
+          "theta_deg": 0.0,
+          "v": [
+            0.0,
+            0.0
+          ]
+        },
+        "x_init": {
+          "omega_deg": 0.0,
+          "r": [
+            4.0,
+            4.0
+          ],
+          "theta_deg": 0.0,
+          "v": [
+            -2.0,
+            -1.0
+          ]
+        }
+      },
+      "constants": {
+        "I": 0.01,
+        "T_max": 5.0,
+        "T_min": 2.0,
+        "g": 1.0,
+        "m": 2.0,
+        "max_gimbal_deg": 7.0,
+        "r_T": 0.01,
+        "theta_max_deg": 60.0,
+        "w_max_deg": 60.0
+      },
+      "initialization": {
+        "gimbal_guess_deg": 0.0,
+        "t_f_guess": 10.0,
+        "thrust_bias": 0.5
+      },
+      "name": "rocket2d",
+      "nondimensionalize": true
+    },
+    "run": {
+      "output_dir": "output/trajectory",
+      "plot": true,
+      "seed": 42,
+      "type": "fixed_final_time"
+    },
+    "trust_region": {
+      "alpha": 2.0,
+      "beta": 3.2,
+      "rho_0": 0.0,
+      "rho_1": 0.25,
+      "rho_2": 0.9,
+      "tr_radius_init": 5.0,
+      "w_nu": "1.0e5"
+    }
+  },
+  "config_path": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal/configs/mars_2d_fixed.yaml",
+  "converged": true,
+  "discretization": {
+    "K": 30,
+    "iterations_done": 14,
+    "iterations_requested": 50
+  },
+  "final_sigma": 10.0,
+  "model": {
+    "m_scale": 2.0,
+    "n_u": 2,
+    "n_x": 6,
+    "name": "Rocket2D",
+    "r_scale": 5.656854249492381
+  },
+  "seed": 42,
+  "solver": {
+    "name": "ECOS",
+    "verbose": false
+  },
+  "trust_region": {
+    "alpha": 2.0,
+    "beta": 3.2,
+    "rho_0": 0.0,
+    "rho_1": 0.25,
+    "rho_2": 0.9,
+    "w_nu": 100000.0
+  }
+}

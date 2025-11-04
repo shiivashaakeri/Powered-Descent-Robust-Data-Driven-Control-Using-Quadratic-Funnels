@@ -1,0 +1,67 @@
+# Physical (plant) config for 2D planar rocket — deviates from the digital twin
+meta:
+  inherits_nominal: "nominal/configs/mars_2d_fixed.yaml"   # reuse dt, K, scaling, etc.
+  description: "Plant with mild mass/CoM/thrust/limits mismatch + perturbed x0"
+
+execution:
+  # Guidance cycle & horizon are inferred from nominal metadata (Δt = t_f/(K-1)).
+  use_nominal_timing: true
+  # Optional: override if desired
+  # dt: 0.34
+
+model:
+  name: rocket2d
+  nondimensionalize: same_as_nominal
+
+  constants:                     # ← small, realistic mismatches vs twin
+    m: 2.10                      # kg  (+5%)
+    I: 1.20e-2                   # kg·m^2  (+20%)
+    g: 1.02                      # m/s^2 (+2%)
+    r_T: 1.10e-2                 # m  (+10% lever arm)
+    T_max: 4.80                  # N  (-4%)
+    T_min: 2.05                  # N  (slightly higher idle)
+    max_gimbal_deg: 6.5          # deg (tighter authority)
+    theta_max_deg: 55.0          # deg (tighter attitude envelope)
+    w_max_deg: 65.0              # deg/s
+
+  boundary:
+    # Start a bit off the twin’s initial condition
+    x_init:
+      r:  [4.4, 4.6]             # m   (Δr ≈ +0.4, +0.6)
+      v:  [-2.2, -1.2]           # m/s (slightly faster descent/drift)
+      theta_deg: 3.0             # deg (small attitude offset)
+      omega_deg: 2.0             # deg/s
+    # Same terminal target as twin
+    x_final:
+      r:  [0.0, 0.0]
+      v:  [0.0, 0.0]
+      theta_deg: 0.0
+      omega_deg: 0.0
+
+assumptions:
+  # Local neighborhood \mathcal S around the nominal trajectory (per-coordinate tubes).
+  # Used to (i) define where the mismatch bound γ applies, (ii) build envelopes.
+  S_tube:
+    state:
+      dr_max_m:        [1.2, 1.2]   # |η_r| bounds around nominal (x,y)
+      dv_max_mps:      [1.5, 1.5]   # |η_v|
+      dtheta_max_deg:  10.0
+      domega_max_degps: 15.0
+    input:
+      dT_max_N:        0.10 * 4.80  # ≤10% of plant T_max
+      dgimbal_max_deg: 2.0
+
+  mismatch:
+    # Initial guess for ||Δ(x,u)|| ≤ γ on \mathcal S (nondimensional, if twin uses scaling).
+    # If ddfs is set to re-estimate, this is only a prior.
+    gamma_initial: 0.03
+    estimate_from_data: true
+    estimate:
+      method: "percentile_residual"   # build Δ via (x⁺ - \hat f)/norm; use z-window in \mathcal S
+      percentile: 0.95
+      min_samples: 200
+
+data_collection:
+  excite: true
+  epsilon_max: 0.02                 # input excitation magnitude cap (‖ε‖)
+  safety_margin: 0.10               # suspend excitation if margin to constraints < 10%

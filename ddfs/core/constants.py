@@ -8,8 +8,8 @@ from typing import Any, Dict
 import numpy as np  # pyright: ignore[reportMissingImports]
 import yaml  # pyright: ignore[reportMissingImports, reportMissingModuleSource]
 
-from ddfs.core.mismatch import deltas_and_gamma
-from ddfs.core.nominal_bound import nominal_increment_bounds
+from ddfs.cons_calc import MismatchCalculator, NominalIncrementBoundCalculator
+from ddfs.cons_calc.smoothness import LipschitzJacobianCalculator, convert_S_tube_to_nondim
 from ddfs.io.load_nominal import load_nominal
 from models.rocket2d import Rocket2D
 from models.rocket6dof import Rocket6DoF
@@ -160,28 +160,98 @@ def main():
         print(f"[q] mean|‖q‖-1|={(np.abs(q_norms - 1)).mean():.3g}")
 
     # Build plant model for Δ/gamma
-    _, f_phys, quat_slice_phys, model_name = _build_phys_model(plant_cfg, r_scale, m_scale)
+    phys, f_phys, quat_slice_phys, model_name = _build_phys_model(plant_cfg, r_scale, m_scale)
 
     # --- Δ and gamma ---
-    _, norms, gamma = deltas_and_gamma(f_phys, X_nom, U_nom, dt_eff, quat_slice_phys)
+    gamma_calc = MismatchCalculator(f_phys, dt=dt_eff, quat_slice=quat_slice_phys, norm="l2")
+    gamma_res = gamma_calc.compute(X_nom, U_nom)
+    gamma = gamma_res.gamma
+    norms = gamma_res.norms
 
-    # --- v (nominal increment bound) using the TWIN dynamics ---
-    f_twin, quat_slice_twin = _build_twin_model(model_name, r_scale, m_scale)
-    v_bounds = nominal_increment_bounds(f_twin, X_nom, U_nom, dt_eff, quat_slice_twin)
-    v_disc = float(v_bounds["v_disc"])
-    v_ct = float(v_bounds["v_ct_bound"])
+    # Nominal increment bound v
+    quat_slice_twin = quat_slice_phys  # same quat slice for both
+    v_calc = NominalIncrementBoundCalculator(dt=dt_eff, quat_slice=quat_slice_twin, norm="l2")
+    v_res = v_calc.from_increments(X_nom, U_nom)
+    v = v_res.v_max
+
+    # Optionally compute rate-based diagnostic (not persisted unless you want to)
+    f_twin, _ = _build_twin_model(model_name, r_scale, m_scale)
+    v_rate_res = v_calc.from_rates(X_nom, U_nom, f_nom=f_twin, u_dot=None)
+    v_rate = v_rate_res.rate_sup
+
+    # --- L_J: Lipschitz bound on Jacobian via Hessian aggregation ---
+    # Convert the S_tube (physical) to non-dimensional, if provided; otherwise use a tiny fallback tube.
+    S_tube_phys = ((plant_cfg.get("assumptions") or {}).get("S_tube"))
+    S_tube_nd = None
+    if S_tube_phys is not None:
+        try:
+            S_tube_nd = convert_S_tube_to_nondim(model_name, S_tube_phys, r_scale, m_scale)
+        except (ValueError, TypeError, KeyError):
+            # Fall back to default if conversion fails (e.g., expression strings in YAML)
+            S_tube_nd = None
+    
+    if S_tube_nd is None:
+        if model_name == "rocket2d":
+            S_tube_nd = {
+                "state": {
+                    "dr_max_nd": [1e-2, 1e-2],
+                    "dv_max_nd": [1e-2, 1e-2],
+                    "dtheta_max_rad": 1e-2,
+                    "domega_max_radps": 1e-2,
+                },
+                "input": {
+                    "dT_max_nd": 1e-2,
+                    "dgimbal_max_rad": 1e-2,
+                },
+            }
+        else:  # rocket6dof
+            S_tube_nd = {
+                "state": {
+                    "dr_max_nd": [1e-2, 1e-2, 1e-2],
+                    "dv_max_nd": [1e-2, 1e-2, 1e-2],
+                    "deuler_max_rad": [1e-2, 1e-2, 1e-2],
+                    "domega_max_radps": [1e-2, 1e-2, 1e-2],
+                    "dm_nd": 0.0,
+                },
+                "input": {
+                    "dT_max_nd": 1e-2,
+                },
+            }
+
+    # Build the non-dimensional parameter dict for the symbolic builders
+    if model_name == "rocket2d":
+        params_nd = {
+            "m": float(phys.m),
+            "I": float(phys.I),
+            "g": float(phys.g),
+            "r_T": float(phys.r_T),
+        }
+    else:  # rocket6dof
+        params_nd = {
+            "g_I": np.asarray(phys.g_I, dtype=float).tolist(),
+            "r_T_B": np.asarray(phys.r_T_B, dtype=float).tolist(),
+            "J_B": np.asarray(phys.J_B, dtype=float).tolist(),
+            "alpha_m": float(phys.alpha_m),
+        }
+
+    lj_calc = LipschitzJacobianCalculator(model_name, params_nd, quat_slice=quat_slice_phys)
+    lj_diag = lj_calc.via_hessians(X_nom, U_nom, S_tube_nd, n_times=32, n_points_per_time=4)
+    L_J = float(lj_diag.L_J)
 
     # Merge into constants.yaml under the model key
     out_item = {
         "model": model_name,
         "gamma": float(gamma),
         "gamma_norm": "l2",
-        "v": v_disc,  # stored discrete bound
-        # (optional: keep CT bound as a hint — comment in/out as you prefer)
-        # "v_ct_bound": v_ct,
         "K": int(K_new),
         "dt": float(dt_eff),
         "nominal_dir": str(nom_dir),
+        "v": float(v),
+        "v_p95": float(v_res.v_p95),
+        "L_J": float(L_J),
+        "L_J_method": lj_diag.method,
+        "L_J_samples": int(lj_diag.samples_evaluated),
+        # "v_rate": float(v_rate) if v_rate is not None else None,  # uncomment if desired
     }
     out_path = Path(args.out) if args.out else Path("ddfs/configs/constants.yaml")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,12 +265,11 @@ def main():
     print(f"  model: {model_name}")
     print(f"  dt: {dt_eff:.6g}  (K={K_new})")
     print(f"  gamma (max ||Δ||₂): {gamma:.6g}")
-    print(f"  v_disc (max ||[Δx;Δu]||₂): {v_disc:.6g}")
-    print(f"  v_ct_bound (Δt·max ||[ẋ;u̇]||₂): {v_ct:.6g}")
-    if norms.size:
-        q95 = float(np.percentile(norms, 95))
-        med = float(np.median(norms))
-        print(f"  median ||Δ||: {med:.6g}, 95th: {q95:.6g}")
+    print(f"  median ||Δ||: {float(np.median(norms)):.6g}, 95th: {float(np.percentile(norms, 95)):.6g}")
+    print(f"  v (max nominal increment): {v:.6g}  (p95: {v_res.v_p95:.6g})")
+    if v_rate is not None:
+        print(f"  v_rate (Δt·max ||[ẋ;u̇]||₂): {v_rate:.6g}")
+    print(f"  L_J (Jacobian Lipschitz bound): {L_J:.6g}  via {lj_diag.method}  (samples: {lj_diag.samples_evaluated})")
 
 
 if __name__ == "__main__":

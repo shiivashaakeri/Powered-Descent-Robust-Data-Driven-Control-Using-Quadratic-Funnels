@@ -1,0 +1,22 @@
+{
+  "plant_yaml": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/ddfs/configs/mars_2d_physical.yaml",
+  "nominal_dir": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket2d",
+  "output_dir": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket2d/max_ellipsoids",
+  "model": "rocket2d",
+  "dt": 0.1,
+  "K": 101,
+  "pairs": {
+    "state": [
+      [
+        0,
+        1
+      ]
+    ],
+    "input": [
+      [
+        0,
+        1
+      ]
+    ]
+  }
+}

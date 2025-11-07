@@ -1,0 +1,22 @@
+{
+  "plant_yaml": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/ddfs/configs/mars_6dof_physical.yaml",
+  "nominal_dir": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket6dof",
+  "output_dir": "/Users/shivashakeri/Documents/University/UW/RAIN/Powered-Descent-Robust-Data-Driven-Control-Using-Quadratic-Funnels/nominal_trajectories/rocket6dof/max_ellipsoids",
+  "model": "rocket6dof",
+  "dt": 0.1000334396044351,
+  "K": 181,
+  "pairs": {
+    "state": [
+      [
+        1,
+        2
+      ]
+    ],
+    "input": [
+      [
+        0,
+        2
+      ]
+    ]
+  }
+}

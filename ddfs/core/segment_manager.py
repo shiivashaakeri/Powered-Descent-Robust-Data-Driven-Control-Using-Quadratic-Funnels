@@ -17,6 +17,7 @@ class SegmentSpec:
     k_end_excl: int
     kD_start: int
     dt: float
+    L_req: int
 
     @property
     def T_slice(self) -> slice:
@@ -35,7 +36,7 @@ class SegmentSpec:
     
     def tilde_T(self) -> int:
         """ worst |k-k_i| over T_i + T_{i+1}: 2|T_i| - 1 """
-        return 2 * self.len_T() - 1
+        return 2 * self.len_T - 1
     
     @property
     def len_D(self) -> int:
@@ -117,6 +118,7 @@ class SegmentTimeline:
                 k_end_excl=k_end_excl,
                 kD_start=kD_start,
                 dt=self.dt,
+                L_req=self.L,
             ))
             i += 1
     
@@ -139,13 +141,11 @@ class SegmentTimeline:
         return min(i, len(self.segments) - 1)
     
     def has_full_data(self, i: int) -> bool:
-        seg = self.segments[i]
-        return (seg.k_end_excl - seg.kD_start) == min(seg.len_T, self.L)
+        return self.segments[i].has_full_data
     
     def data_length(self, i: int) -> int:
         """ |T_i^D| for segment i. """
-        seg = self.segments[i]
-        return seg.len_D
+        return self.segments[i].len_D
     
     def summary(self) -> str:
         lines = [

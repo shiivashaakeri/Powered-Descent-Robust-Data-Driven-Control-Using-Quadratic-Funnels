@@ -6,6 +6,8 @@ from typing import Literal, Optional, Tuple
 
 import numpy as np # type: ignore
 
+from models.discretization import integrate_one_step
+
 QuatMode = Literal["tangent", "component"]
 
 # ----------------------
@@ -224,6 +226,19 @@ class DeviationModel:
     
     def u_from_xi_k(self, xi: np.ndarray, k: int) -> np.ndarray:
         return self.U_nom[:, k] + np.asarray(xi, dtype=float).reshape(-1)
+
+
+    def f_dt(self, x, u):
+        """Discrete one-step map x_{k+1} = f_dt(x,u) using your twin model + dt."""
+        return integrate_one_step(self.twin_model, x, u, self.dt)
+
+    def linearize_at(self, k: int, eps: float = 1e-6):
+        """Numerical linearization of the *discrete* map at nominal (x_hat[k], u_hat[k])."""
+        from ddfs.core.initial_gain import finite_diff_jacobian
+        xk = self.x_nom[k]
+        uk = self.u_nom[k]
+        # Ensure quaternion normalization happens inside f_dt (your integrator already does)
+        return finite_diff_jacobian(lambda xx, uu: self.f_dt(xx, uu), xk, uk, eps)
     
     # --------- shape ---------
     @property

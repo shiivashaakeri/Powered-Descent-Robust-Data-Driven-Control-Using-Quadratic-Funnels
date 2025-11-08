@@ -27,10 +27,15 @@ class SegmentSpec:
         """ Slice for the data window steps (used for H_i, Xi_i). """
         return slice(self.kD_start, self.k_end_excl)
     
+    
     @property
     def len_T(self) -> int:
         """ |T_i| = number of steps in the segment. """
         return self.k_end_excl - self.k_start
+    
+    def tilde_T(self) -> int:
+        """ worst |k-k_i| over T_i + T_{i+1}: 2|T_i| - 1 """
+        return 2 * self.len_T() - 1
     
     @property
     def len_D(self) -> int:

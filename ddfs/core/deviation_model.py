@@ -131,125 +131,125 @@ class DeviationModel:
             raise ValueError(f"X_nom has wrong shape: {self.X_nom.shape}, expected ({self.n_x}, K)")
         if self.U_nom.shape[0] != self.n_u:
             raise ValueError(f"U_nom has wrong shape: {self.U_nom.shape}, expected ({self.n_u}, K)")
-        
-        # ------- single step mapping -------
-        def eta_k(self, x: np.ndarray, k: int) -> np.ndarray:
-            """
-            Deviation eta at step k from actual x and nominal X_nom[:, k]
-            """
-            x = np.asarray(x, dtype=float).reshape(-1)
-            x_nom = self.X_nom[:, k].reshape(-1)
+    
+    # ------- single step mapping -------
+    def eta_k(self, x: np.ndarray, k: int) -> np.ndarray:
+        """
+        Deviation eta at step k from actual x and nominal X_nom[:, k]
+        """
+        x = np.asarray(x, dtype=float).reshape(-1)
+        x_nom = self.X_nom[:, k].reshape(-1)
 
-            if self.model_name == "rocket2d":
-                e = x - x_nom
-                if self.angle_wrap_2d:
-                    e[self.theta_idx] = float(_wrap_to_pi(x[self.theta_idx] - x_nom[self.theta_idx]))
-                return e
-            
-            if self.quat_mode == "component":
-                e = x - x_nom
-                q = _q_align_hemisphere(_q_unit(x[self.quat_slice]), _q_unit(x_nom[self.quat_slice]))
-                e[self.quat_slice] = q - x_nom[self.quat_slice]
-                return e
-            
-            # tangent mode
-            e = np.empty((self.n_eta,), dtype=float)
-            e[0:7] = x[0:7] - x_nom[0:7]
-            q = _q_unit(x[self.quat_slice])
-            q_nom = _q_unit(self.X_nom[self.quat_slice, k])
-            q = _q_align_hemisphere(q, q_nom)
-            q_rel = _q_mul(q, _q_conj(q_nom))
-            e[7:10] = _quat_to_rotvec(q_rel)
-            e[10:13] = x[11:14] - x_nom[11:14]
+        if self.model_name == "rocket2d":
+            e = x - x_nom
+            if self.angle_wrap_2d:
+                e[self.theta_idx] = float(_wrap_to_pi(x[self.theta_idx] - x_nom[self.theta_idx]))
             return e
         
-        def xi_k(self, eta: np.ndarray, k: int) -> np.ndarray:
-            """
-            Deviation xi at step k from actual u and nominal U_nom[:, k]
-            """
-            u = np.asarray(u, dtype=float).reshape(-1)
-            return u - self.U_nom[:, k].reshape(-1)
+        if self.quat_mode == "component":
+            e = x - x_nom
+            q = _q_align_hemisphere(_q_unit(x[self.quat_slice]), _q_unit(x_nom[self.quat_slice]))
+            e[self.quat_slice] = q - x_nom[self.quat_slice]
+            return e
         
-        # ------- batch trajectory mapping -------
-        def eta_traj(self, X: np.ndarray) -> np.ndarray:
-            X = np.asarray(X, dtype=float)
-            if X.shape != self.X_nom.shape:
-                raise ValueError(f"X has wrong shape: {X.shape}, expected {self.X_nom.shape}")
-            K = X.shape[1]
-            E = np.zeros((self.n_eta, K), dtype=float)
-            for k in range(K):
-                E[:, k] = self.eta_k(X[:, k], k)
-            return E
-        
-        def xi_traj(self, U: np.ndarray) -> np.ndarray:
-            U = np.asarray(U, dtype=float)
-            if U.shape != self.U_nom.shape:
-                raise ValueError(f"U has wrong shape: {U.shape}, expected {self.U_nom.shape}")
-            return U - self.U_nom
-        
-        # -------- inverse mapping -------
-        def x_from_eta_k(self, eta: np.ndarray, k: int) -> np.ndarray:
-            """
-            Compose actual k from eta and nominal at step k
-            """
-            x_nom = self.X_nom[:, k].copy()
-            eta = np.asarray(eta, dtype=float).reshape(-1)
+        # tangent mode
+        e = np.empty((self.n_eta,), dtype=float)
+        e[0:7] = x[0:7] - x_nom[0:7]
+        q = _q_unit(x[self.quat_slice])
+        q_nom = _q_unit(self.X_nom[self.quat_slice, k])
+        q = _q_align_hemisphere(q, q_nom)
+        q_rel = _q_mul(q, _q_conj(q_nom))
+        e[7:10] = _quat_to_rotvec(q_rel)
+        e[10:13] = x[11:14] - x_nom[11:14]
+        return e
+    
+    def xi_k(self, u: np.ndarray, k: int) -> np.ndarray:
+        """
+        Deviation xi at step k from actual u and nominal U_nom[:, k]
+        """
+        u = np.asarray(u, dtype=float).reshape(-1)
+        return u - self.U_nom[:, k].reshape(-1)
+    
+    # ------- batch trajectory mapping -------
+    def eta_traj(self, X: np.ndarray) -> np.ndarray:
+        X = np.asarray(X, dtype=float)
+        if X.shape != self.X_nom.shape:
+            raise ValueError(f"X has wrong shape: {X.shape}, expected {self.X_nom.shape}")
+        K = X.shape[1]
+        E = np.zeros((self.n_eta, K), dtype=float)
+        for k in range(K):
+            E[:, k] = self.eta_k(X[:, k], k)
+        return E
+    
+    def xi_traj(self, U: np.ndarray) -> np.ndarray:
+        U = np.asarray(U, dtype=float)
+        if U.shape != self.U_nom.shape:
+            raise ValueError(f"U has wrong shape: {U.shape}, expected {self.U_nom.shape}")
+        return U - self.U_nom
+    
+    # -------- inverse mapping -------
+    def x_from_eta_k(self, eta: np.ndarray, k: int) -> np.ndarray:
+        """
+        Compose actual k from eta and nominal at step k
+        """
+        x_nom = self.X_nom[:, k].copy()
+        eta = np.asarray(eta, dtype=float).reshape(-1)
 
-            if self.model_name == "rocket2d":
-                x = x_nom.copy()
-                x += eta
-                if self.angle_wrap_2d:
-                    x[self.theta_idx] = float(_wrap_to_pi(x[self.theta_idx]))
-                return x
-            
-            if self.quat_mode == "component":
-                x = x_nom.copy()
-                x += eta
-                x[self.quat_slice] = _q_unit(x[self.quat_slice])
-                return x
-            
-            # tangent mode
+        if self.model_name == "rocket2d":
             x = x_nom.copy()
-            # m, r, v
-            x[0:7] = x_nom[0:7] + eta[0:7]
-            # quat
-            q_nom = _q_unit(x_nom[self.quat_slice])
-            r = eta[7:10]
-            dq = _rotvec_to_quat(r)
-            q = _q_mul(dq, q_nom)
-            x[self.quat_slice] = _q_unit(q)
-            # body rates
-            x[11:14] = x_nom[11:14] + eta[10:13]
+            x += eta
+            if self.angle_wrap_2d:
+                x[self.theta_idx] = float(_wrap_to_pi(x[self.theta_idx]))
             return x
         
-        def u_from_xi_k(self, xi: np.ndarray, k: int) -> np.ndarray:
-            return self.U_nom[:, k] + np.asarray(xi, dtype=float).reshape(-1)
+        if self.quat_mode == "component":
+            x = x_nom.copy()
+            x += eta
+            x[self.quat_slice] = _q_unit(x[self.quat_slice])
+            return x
         
-        # --------- shape ---------
-        @property
-        def n(self) -> int:
-            """ Dimensions of eta """
-            return self.n_eta
-        
-        @property
-        def m(self) -> int:
-            """ Dimensions of xi """
-            return self.n_u
-        
-        # -------- utilities --------
-        def update_nominal(self, X_nom: np.ndarray, U_nom: np.ndarray) -> None:
-            X_nom = np.asarray(X_nom, dtype=float)
-            U_nom = np.asarray(U_nom, dtype=float)
-            if X_nom.shape[0] != self.n_x or U_nom.shape[0] != self.n_u:
-                raise ValueError("Nominal shapes do not match model dimensions.")
-            self.X_nom = X_nom
-            self.U_nom = U_nom
-        
-        def slices(self) -> Tuple[Optional[slice], Optional[int]]:
-            """
-            Returns (quat_slice, theta_idx) for convenience in callers.
-            """
-            return self.quat_slice, getattr(self, "theta_idx", None)
+        # tangent mode
+        x = x_nom.copy()
+        # m, r, v
+        x[0:7] = x_nom[0:7] + eta[0:7]
+        # quat
+        q_nom = _q_unit(x_nom[self.quat_slice])
+        r = eta[7:10]
+        dq = _rotvec_to_quat(r)
+        q = _q_mul(dq, q_nom)
+        x[self.quat_slice] = _q_unit(q)
+        # body rates
+        x[11:14] = x_nom[11:14] + eta[10:13]
+        return x
+    
+    def u_from_xi_k(self, xi: np.ndarray, k: int) -> np.ndarray:
+        return self.U_nom[:, k] + np.asarray(xi, dtype=float).reshape(-1)
+    
+    # --------- shape ---------
+    @property
+    def n(self) -> int:
+        """ Dimensions of eta """
+        return self.n_eta
+    
+    @property
+    def m(self) -> int:
+        """ Dimensions of xi """
+        return self.n_u
+    
+    # -------- utilities --------
+    def update_nominal(self, X_nom: np.ndarray, U_nom: np.ndarray) -> None:
+        X_nom = np.asarray(X_nom, dtype=float)
+        U_nom = np.asarray(U_nom, dtype=float)
+        if X_nom.shape[0] != self.n_x or U_nom.shape[0] != self.n_u:
+            raise ValueError("Nominal shapes do not match model dimensions.")
+        self.X_nom = X_nom
+        self.U_nom = U_nom
+    
+    def slices(self) -> Tuple[Optional[slice], Optional[int]]:
+        """
+        Returns (quat_slice, theta_idx) for convenience in callers.
+        """
+        return self.quat_slice, getattr(self, "theta_idx", None)
 
 # ----------------------
 # module-level convenience

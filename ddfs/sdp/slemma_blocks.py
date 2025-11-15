@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np  # pyright: ignore[reportMissingImports]
+import cvxpy as cp  # type: ignore
 
 
 def s_dim(n: int, m: int) -> int:
@@ -12,7 +13,7 @@ def s_dim(n: int, m: int) -> int:
     return 4 * int(n) + 2 * int(m)
 
 
-def S_block(P: np.ndarray, L: np.ndarray, nu: float, alpha: float = 0.99) -> np.ndarray:
+def S_block(P, L, nu, alpha: float = 0.99):
     r"""
     Build the big S(P_i, L_i, \nu) block used in the S-lemma certificate:
 
@@ -31,33 +32,69 @@ def S_block(P: np.ndarray, L: np.ndarray, nu: float, alpha: float = 0.99) -> np.
       - L: (m,n)
       - returns: (4n+2m, 4n+2m)
     """
-    P = np.asarray(P, dtype=float)
-    L = np.asarray(L, dtype=float)
-    n = P.shape[0]
-    if P.ndim != 2 or P.shape[1] != n:
-        raise ValueError("P must be square (n x n).")
-    if L.ndim != 2 or L.shape[1] != n:
-        raise ValueError("L must have shape (m x n).")
-    m = L.shape[0]
+    # Check if inputs are CVXPY expressions
+    is_cvxpy = isinstance(P, cp.Expression) or isinstance(L, cp.Expression) or isinstance(nu, cp.Expression)
+    
+    if is_cvxpy:
+        # CVXPY version - work with expressions
+        n = P.shape[0]
+        m = L.shape[0]
+        
+        # Create zero matrices as CVXPY constants
+        Znn = cp.Constant(np.zeros((n, n), dtype=float))
+        Znm = cp.Constant(np.zeros((n, m), dtype=float))
+        Zmn = cp.Constant(np.zeros((m, n), dtype=float))
+        Zmm = cp.Constant(np.zeros((m, m), dtype=float))
+        
+        # Convert nu to expression if needed
+        if not isinstance(nu, cp.Expression):
+            nu_expr = cp.Constant(float(nu))
+        else:
+            nu_expr = nu
+        
+        # Build block matrix using CVXPY bmat
+        A11 = alpha * P - nu_expr * cp.Constant(np.eye(n, dtype=float))
+        
+        S = cp.bmat([
+            [A11,  Znn,   Znm,   Znn,   Znm,   Znn],
+            [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
+            [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
+            [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
+            [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
+            [Znn,  Znn,   L.T,   Znn,   L.T,     P ],
+        ])
+        
+        # Symmetrize for numerical hygiene
+        return 0.5 * (S + S.T)
+    else:
+        # NumPy version - original implementation
+        P = np.asarray(P, dtype=float)
+        L = np.asarray(L, dtype=float)
+        n = P.shape[0]
+        if P.ndim != 2 or P.shape[1] != n:
+            raise ValueError("P must be square (n x n).")
+        if L.ndim != 2 or L.shape[1] != n:
+            raise ValueError("L must have shape (m x n).")
+        m = L.shape[0]
 
-    Znn = np.zeros((n, n), dtype=float)
-    Znm = np.zeros((n, m), dtype=float)
-    Zmn = np.zeros((m, n), dtype=float)
-    Zmm = np.zeros((m, m), dtype=float)
+        Znn = np.zeros((n, n), dtype=float)
+        Znm = np.zeros((n, m), dtype=float)
+        Zmn = np.zeros((m, n), dtype=float)
+        Zmm = np.zeros((m, m), dtype=float)
 
-    A11 = alpha * P - float(nu) * np.eye(n, dtype=float)
+        A11 = alpha * P - float(nu) * np.eye(n, dtype=float)
 
-    S = np.block([
-        [A11,  Znn,   Znm,   Znn,   Znm,   Znn],
-        [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
-        [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
-        [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
-        [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
-        [Znn,  Znn,   L.T,   Znn,   L.T,     P ],
-    ])
+        S = np.block([
+            [A11,  Znn,   Znm,   Znn,   Znm,   Znn],
+            [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
+            [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
+            [Znn,  -P,   -L.T,   -P,   -L.T,   Znn],
+            [Zmn,  -L,    Zmm,   -L,    Zmm,    L ],
+            [Znn,  Znn,   L.T,   Znn,   L.T,     P ],
+        ])
 
-    # Numerical symmetrization for hygiene
-    return 0.5 * (S + S.T)
+        # Numerical symmetrization for hygiene
+        return 0.5 * (S + S.T)
 
 
 def pad_N(N: np.ndarray, total_dim: int) -> np.ndarray:
